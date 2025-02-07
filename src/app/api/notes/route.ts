@@ -1,147 +1,109 @@
 import { getRequestContext } from "@cloudflare/next-on-pages"
 import { type NextRequest, NextResponse } from "next/server"
-import { ZodError } from "zod"
-import { noteService } from "@/lib/note-service"
-import { ApiError, BadRequestError } from "@/lib/errors"
-import { noteSchema, idSchema } from "@/lib/validation"
-import type { ApiResponse } from "@/lib/types"
 
 export const runtime = "edge"
 
-/**
- * Helper function to generate a consistent API response
- */
-function apiResponse<T>(data: T, status = 200): NextResponse<ApiResponse<T>> {
-  return NextResponse.json({ success: true, data }, { status })
+interface Note {
+  id: string
+  content: string
+  createdAt: number
+  updatedAt: number
 }
 
-/**
- * Helper function to handle errors and generate error responses
- */
-function handleError(error: unknown): NextResponse<ApiResponse<never>> {
-  console.error(error)
-
-  if (error instanceof ZodError) {
-    return NextResponse.json({ success: false, error: "Validation error", data: error.errors }, { status: 400 })
-  }
-
-  if (error instanceof ApiError) {
-    return NextResponse.json({ success: false, error: error.message }, { status: error.statusCode })
-  }
-
-  return NextResponse.json({ success: false, error: "Internal server error" }, { status: 500 })
+// Helper function to generate a response
+function jsonResponse(data: any, status = 200) {
+  return NextResponse.json(data, { status })
 }
 
-/**
- * Rate limiting middleware
- */
-async function rateLimit(request: NextRequest): Promise<void> {
-  const { env } = getRequestContext()
-  const ip = request.ip ?? "127.0.0.1"
-  const key = `rate_limit:${ip}`
-  const limit = env.RATE_LIMIT_REQUESTS
-  const duration = env.RATE_LIMIT_DURATION
-
-  const current = await env.NOTES_KV.get(key)
-  const count = current ? Number.parseInt(current, 10) : 0
-
-  if (count >= limit) {
-    throw new ApiError(429, "Too many requests")
-  }
-
-  await env.NOTES_KV.put(key, (count + 1).toString(), { expirationTtl: duration })
-}
-
-/**
- * GET /api/notes
- * GET /api/notes?id=:id
- *
- * Retrieve all notes or a specific note
- */
+// List all notes
 export async function GET(request: NextRequest) {
-  try {
-    await rateLimit(request)
+  const { env } = getRequestContext()
+  const { searchParams } = new URL(request.url)
+  const id = searchParams.get("id")
 
-    const { searchParams } = new URL(request.url)
-    const id = searchParams.get("id")
-
-    if (id) {
-      const validatedId = idSchema.parse(id)
-      const note = await noteService.getNote(validatedId)
-      return apiResponse(note)
-    } else {
-      const notes = await noteService.listNotes()
-      return apiResponse(notes)
+  if (id) {
+    // Get a specific note
+    const note = await env.NOTES_KV.get(id)
+    if (!note) {
+      return jsonResponse({ error: "Note not found" }, 404)
     }
-  } catch (error) {
-    return handleError(error)
+    return jsonResponse(JSON.parse(note))
+  } else {
+    // List all notes
+    const { keys } = await env.NOTES_KV.list()
+    const notes = await Promise.all(
+      keys.map(async (key) => {
+        const note = await env.NOTES_KV.get(key.name)
+        return note ? JSON.parse(note) : null
+      }),
+    )
+    return jsonResponse(notes.filter(Boolean))
   }
 }
 
-/**
- * POST /api/notes
- *
- * Create a new note
- */
+// Create a new note
 export async function POST(request: NextRequest) {
-  try {
-    await rateLimit(request)
+  const { env } = getRequestContext()
+  const { content } = await request.json()
 
-    const body = await request.json()
-    const { content } = noteSchema.parse(body)
-    const note = await noteService.createNote(content)
-    return apiResponse(note, 201)
-  } catch (error) {
-    return handleError(error)
+  if (!content) {
+    return jsonResponse({ error: "Content is required" }, 400)
   }
+
+  const id = crypto.randomUUID()
+  const note: Note = {
+    id,
+    content,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  }
+
+  await env.NOTES_KV.put(id, JSON.stringify(note))
+  return jsonResponse(note, 201)
 }
 
-/**
- * PUT /api/notes?id=:id
- *
- * Update an existing note
- */
+// Update an existing note
 export async function PUT(request: NextRequest) {
-  try {
-    await rateLimit(request)
+  const { env } = getRequestContext()
+  const { searchParams } = new URL(request.url)
+  const id = searchParams.get("id")
+  const { content } = await request.json()
 
-    const { searchParams } = new URL(request.url)
-    const id = searchParams.get("id")
-    if (!id) {
-      throw new BadRequestError("ID is required")
-    }
-
-    const validatedId = idSchema.parse(id)
-    const body = await request.json()
-    const { content } = noteSchema.parse(body)
-
-    const updatedNote = await noteService.updateNote(validatedId, content)
-    return apiResponse(updatedNote)
-  } catch (error) {
-    return handleError(error)
+  if (!id || !content) {
+    return jsonResponse({ error: "ID and content are required" }, 400)
   }
+
+  const existingNote = await env.NOTES_KV.get(id)
+  if (!existingNote) {
+    return jsonResponse({ error: "Note not found" }, 404)
+  }
+
+  const updatedNote: Note = {
+    ...JSON.parse(existingNote),
+    content,
+    updatedAt: Date.now(),
+  }
+
+  await env.NOTES_KV.put(id, JSON.stringify(updatedNote))
+  return jsonResponse(updatedNote)
 }
 
-/**
- * DELETE /api/notes?id=:id
- *
- * Delete a note
- */
+// Delete a note
 export async function DELETE(request: NextRequest) {
-  try {
-    await rateLimit(request)
+  const { env } = getRequestContext()
+  const { searchParams } = new URL(request.url)
+  const id = searchParams.get("id")
 
-    const { searchParams } = new URL(request.url)
-    const id = searchParams.get("id")
-    if (!id) {
-      throw new BadRequestError("ID is required")
-    }
-
-    const validatedId = idSchema.parse(id)
-    await noteService.deleteNote(validatedId)
-    return apiResponse({ message: "Note deleted successfully" })
-  } catch (error) {
-    return handleError(error)
+  if (!id) {
+    return jsonResponse({ error: "ID is required" }, 400)
   }
+
+  const existingNote = await env.NOTES_KV.get(id)
+  if (!existingNote) {
+    return jsonResponse({ error: "Note not found" }, 404)
+  }
+
+  await env.NOTES_KV.delete(id)
+  return jsonResponse({ message: "Note deleted successfully" })
 }
 
