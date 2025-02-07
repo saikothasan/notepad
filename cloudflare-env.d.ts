@@ -1,3 +1,3 @@
 interface CloudflareEnv {
-  NOTES_KV: NOTES;
+  NOTES_KV: KVNamespace;
 }
