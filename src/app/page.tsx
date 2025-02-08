@@ -4,17 +4,18 @@ import { useState } from "react"
 import { NoteForm } from "@/components/note-form"
 import { NoteList } from "@/components/note-list"
 import { useNotes } from "@/lib/use-notes"
+import type { Note } from "@/lib/types"
 
 export default function Home() {
   const { notes, addNote, updateNote, deleteNote } = useNotes()
-  const [editingNote, setEditingNote] = useState<{ id: string; content: string } | null>(null)
+  const [editingNote, setEditingNote] = useState<Note | null>(null)
 
-  const handleSubmit = (content: string) => {
+  const handleSubmit = (content: string, isPublic: boolean, expiresIn?: number) => {
     if (editingNote) {
-      updateNote(editingNote.id, content)
+      updateNote(editingNote.id, content, isPublic, expiresIn)
       setEditingNote(null)
     } else {
-      addNote(content)
+      addNote(content, isPublic, expiresIn)
     }
   }
 
@@ -24,11 +25,16 @@ export default function Home() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <h2 className="text-xl font-semibold mb-2">{editingNote ? "Edit Note" : "Create Note"}</h2>
-          <NoteForm onSubmit={handleSubmit} initialContent={editingNote?.content} />
+          <NoteForm
+            onSubmit={handleSubmit}
+            initialContent={editingNote?.content}
+            initialIsPublic={editingNote?.isPublic}
+            initialExpiresIn={editingNote?.expiresIn}
+          />
         </div>
         <div>
           <h2 className="text-xl font-semibold mb-2">Notes</h2>
-          <NoteList notes={notes} onEdit={(note) => setEditingNote(note)} onDelete={deleteNote} />
+          <NoteList notes={notes} onEdit={setEditingNote} onDelete={deleteNote} />
         </div>
       </div>
     </main>
