@@ -3,38 +3,24 @@
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { Switch } from "@/components/ui/switch"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import type { Note } from "@/lib/types"
 
 interface NoteFormProps {
-  onSubmit: (note: Omit<Note, "id" | "createdAt" | "updatedAt">) => void
-  initialNote?: Note | null
+  onSubmit: (content: string) => void
+  initialContent?: string
 }
 
-export function NoteForm({ onSubmit, initialNote = null }: NoteFormProps) {
-  const [content, setContent] = useState(initialNote?.content || "")
-  const [isPublic, setIsPublic] = useState(initialNote?.isPublic || false)
-  const [expiresIn, setExpiresIn] = useState(initialNote?.expiresIn || "never")
+export function NoteForm({ onSubmit, initialContent = "" }: NoteFormProps) {
+  const [content, setContent] = useState(initialContent)
 
   useEffect(() => {
-    if (initialNote) {
-      setContent(initialNote.content)
-      setIsPublic(initialNote.isPublic)
-      setExpiresIn(initialNote.expiresIn)
-    }
-  }, [initialNote])
+    setContent(initialContent)
+  }, [initialContent])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (content.trim()) {
-      onSubmit({ content, isPublic, expiresIn })
-      if (!initialNote) {
-        setContent("")
-        setIsPublic(false)
-        setExpiresIn("never")
-      }
+      onSubmit(content)
+      setContent("")
     }
   }
 
@@ -44,24 +30,9 @@ export function NoteForm({ onSubmit, initialNote = null }: NoteFormProps) {
         value={content}
         onChange={(e) => setContent(e.target.value)}
         placeholder="Enter your note here..."
-        className="min-h-[200px]"
+        className="min-h-[100px]"
       />
-      <div className="flex items-center space-x-2">
-        <Switch id="public-switch" checked={isPublic} onCheckedChange={setIsPublic} />
-        <Label htmlFor="public-switch">Public</Label>
-      </div>
-      <Select value={expiresIn} onValueChange={setExpiresIn}>
-        <SelectTrigger>
-          <SelectValue placeholder="Select expiration" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="never">Never</SelectItem>
-          <SelectItem value="1h">1 hour</SelectItem>
-          <SelectItem value="1d">1 day</SelectItem>
-          <SelectItem value="1w">1 week</SelectItem>
-        </SelectContent>
-      </Select>
-      <Button type="submit">{initialNote ? "Update" : "Add"} Note</Button>
+      <Button type="submit">{initialContent ? "Update" : "Add"} Note</Button>
     </form>
   )
 }
