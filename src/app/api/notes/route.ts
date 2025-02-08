@@ -44,10 +44,20 @@ export async function GET(request: NextRequest) {
 // Create a new note
 export async function POST(request: NextRequest) {
   const { env } = getRequestContext()
-  const { content } = await request.json()
 
-  if (!content) {
-    return jsonResponse({ error: "Content is required" }, 400)
+  let content: string
+  try {
+    const body = await request.json()
+    if (typeof body !== "object" || body === null || !("content" in body) || typeof body.content !== "string") {
+      return jsonResponse({ error: "Invalid request body. Expected { content: string }" }, 400)
+    }
+    content = body.content
+  } catch (error) {
+    return jsonResponse({ error: "Invalid JSON in request body" }, 400)
+  }
+
+  if (!content.trim()) {
+    return jsonResponse({ error: "Content is required and cannot be empty" }, 400)
   }
 
   const id = crypto.randomUUID()
@@ -67,10 +77,24 @@ export async function PUT(request: NextRequest) {
   const { env } = getRequestContext()
   const { searchParams } = new URL(request.url)
   const id = searchParams.get("id")
-  const { content } = await request.json()
 
-  if (!id || !content) {
-    return jsonResponse({ error: "ID and content are required" }, 400)
+  if (!id) {
+    return jsonResponse({ error: "ID is required" }, 400)
+  }
+
+  let content: string
+  try {
+    const body = await request.json()
+    if (typeof body !== "object" || body === null || !("content" in body) || typeof body.content !== "string") {
+      return jsonResponse({ error: "Invalid request body. Expected { content: string }" }, 400)
+    }
+    content = body.content
+  } catch (error) {
+    return jsonResponse({ error: "Invalid JSON in request body" }, 400)
+  }
+
+  if (!content.trim()) {
+    return jsonResponse({ error: "Content is required and cannot be empty" }, 400)
   }
 
   const existingNote = await env.NOTES_KV.get(id)
