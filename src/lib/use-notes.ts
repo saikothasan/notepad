@@ -1,13 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-
-interface Note {
-  id: string
-  content: string
-  createdAt: number
-  updatedAt: number
-}
+import type { Note } from "./types"
 
 export function useNotes() {
   const [notes, setNotes] = useState<Note[]>([])
@@ -29,14 +23,14 @@ export function useNotes() {
     fetchNotes()
   }, []) //This is the line that was missing a dependency
 
-  const addNote = async (content: string) => {
+  const addNote = async (content: string, isPublic = false, expiresIn?: number) => {
     try {
       const response = await fetch("/api/notes", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ content }),
+        body: JSON.stringify({ content, isPublic, expiresIn }),
       })
       if (!response.ok) {
         throw new Error("Failed to add note")
@@ -48,14 +42,14 @@ export function useNotes() {
     }
   }
 
-  const updateNote = async (id: string, content: string) => {
+  const updateNote = async (id: string, content: string, isPublic?: boolean, expiresIn?: number) => {
     try {
       const response = await fetch(`/api/notes?id=${id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ content }),
+        body: JSON.stringify({ content, isPublic, expiresIn }),
       })
       if (!response.ok) {
         throw new Error("Failed to update note")
